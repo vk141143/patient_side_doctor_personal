@@ -1,0 +1,291 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Healthcare Professional Theme */
+    --background: 210 20% 98%;
+    --foreground: 210 40% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 40% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 40% 11%;
+
+    /* Primary - Professional Teal */
+    --primary: 173 58% 39%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Soft Blue */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 210 40% 11%;
+
+    /* Muted */
+    --muted: 210 20% 96%;
+    --muted-foreground: 210 15% 46%;
+
+    /* Accent - Medical Green */
+    --accent: 158 64% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 158 64% 42%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 11%;
+    
+    --urgent: 0 72% 51%;
+    --urgent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 173 58% 39%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 210 40% 11%;
+    --sidebar-primary: 173 58% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 210 40% 11%;
+    --sidebar-border: 210 20% 90%;
+    --sidebar-ring: 173 58% 39%;
+
+    /* Custom Healthcare Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(173 58% 39%) 0%, hsl(173 58% 32%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(158 64% 52%) 0%, hsl(158 64% 42%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
+  }
+
+  .dark {
+    --background: 210 40% 6%;
+    --foreground: 210 20% 98%;
+
+    --card: 210 40% 10%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 210 40% 10%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 173 58% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 30% 15%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 210 30% 15%;
+    --muted-foreground: 210 20% 65%;
+
+    --accent: 158 64% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 158 64% 52%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 100%;
+    
+    --urgent: 0 72% 51%;
+    --urgent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 30% 20%;
+    --input: 210 30% 20%;
+    --ring: 173 58% 50%;
+
+    --sidebar-background: 210 40% 8%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 173 58% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 30% 15%;
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 210 30% 20%;
+    --sidebar-ring: 173 58% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Progress Step Indicator */
+  .step-indicator {
+    @apply flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold transition-all duration-300;
+  }
+  
+  .step-indicator-active {
+    @apply bg-primary text-primary-foreground shadow-lg;
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
+  }
+  
+  .step-indicator-completed {
+    @apply bg-success text-success-foreground;
+  }
+  
+  .step-indicator-pending {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Medical Card Styles */
+  .medical-card {
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm transition-all duration-200;
+  }
+  
+  .medical-card:hover {
+    @apply shadow-md border-primary/20;
+  }
+
+  /* Status Badge */
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .status-mild {
+    @apply bg-success/10 text-success;
+  }
+  
+  .status-moderate {
+    @apply bg-warning/10 text-warning;
+  }
+  
+  .status-urgent {
+    @apply bg-urgent/10 text-urgent;
+  }
+
+  /* Toggle Switch Enhanced */
+  .toggle-control {
+    @apply flex items-center justify-between p-4 bg-card rounded-xl border border-border;
+  }
+
+  /* Floating Action */
+  .fab {
+    @apply fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center transition-transform hover:scale-110;
+  }
+
+  /* Chat Bubble */
+  .chat-bubble {
+    @apply max-w-[80%] rounded-2xl px-4 py-3 text-sm;
+  }
+  
+  .chat-bubble-sent {
+    @apply bg-primary text-primary-foreground rounded-br-md ml-auto;
+  }
+  
+  .chat-bubble-received {
+    @apply bg-muted text-foreground rounded-bl-md;
+  }
+
+  /* Stat Card */
+  .stat-card {
+    @apply bg-card rounded-xl p-4 border border-border flex flex-col gap-1;
+  }
+  
+  .stat-value {
+    @apply text-2xl font-bold text-foreground;
+  }
+  
+  .stat-label {
+    @apply text-sm text-muted-foreground;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* ── Ultra-thin teal scrollbar — Chrome/Safari (webkit) ───────────────────── */
+.scrollable-content {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: hsla(168, 76%, 36%, 0.6) transparent;
+}
+
+.scrollable-content::-webkit-scrollbar { width: 3px; }
+.scrollable-content::-webkit-scrollbar-track { background: transparent; }
+.scrollable-content::-webkit-scrollbar-thumb { background-color: hsla(168, 76%, 36%, 0.6); border-radius: 999px; }
+.scrollable-content::-webkit-scrollbar-thumb:hover { background-color: hsla(168, 76%, 36%, 0.9); }
+
+/* Radix ScrollArea viewport */
+[data-radix-scroll-area-viewport] {
+  scrollbar-width: thin;
+  scrollbar-color: hsla(168, 76%, 36%, 0.6) transparent;
+}
+[data-radix-scroll-area-viewport]::-webkit-scrollbar { width: 3px; }
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-track { background: transparent; }
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb { background-color: hsla(168, 76%, 36%, 0.6); border-radius: 999px; }
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb:hover { background-color: hsla(168, 76%, 36%, 0.9); }
+
+/* ── Global thin scrollbar for ALL overflow-y-auto elements ───────────────── */
+/* Dark theme (default) */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #1F2937;
+}
+::-webkit-scrollbar-thumb {
+  background: #4B5563;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6B7280;
+}
+
+/* Light theme overrides */
+.light ::-webkit-scrollbar-track,
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #F9FAFB;
+}
+.light ::-webkit-scrollbar-thumb,
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 999px;
+}
+.light ::-webkit-scrollbar-thumb:hover,
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Scrollbar utility classes */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: #4B5563 #1F2937;
+}
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: #D1D5DB #F9FAFB;
+}
