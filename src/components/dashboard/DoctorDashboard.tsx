@@ -15,13 +15,14 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { useDoctor } from "@/hooks/useDoctor";
 import { updateDoctorOnlineStatus, updateDoctorAvailability, supabase } from "@/lib/supabase";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useQueue } from "@/context/ConsultationQueueProvider";
 
 export function DoctorDashboard() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { doctor, loading } = useDoctor();
 
-  const [isOnline, setIsOnline] = useState(() => localStorage.getItem("doctor_online") === "true");
+  const { isOnline, setOnline } = useQueue();
   const [activeRequest, setActiveRequest] = useState<ConsultationRequest | null>(null);
   const [availability, setAvailability] = useState({ chat: true, opd: true });
   const [showOpdOfflinePopup, setShowOpdOfflinePopup] = useState(false);
@@ -120,7 +121,7 @@ export function DoctorDashboard() {
     const load = async () => {
       const { data } = await supabase.from("admin_pricing").select("key, value");
       (data ?? []).forEach((row: { key: string; value: number }) => {
-        if (row.key === "available_chat_price")  setChatEarningRate(row.value);
+        if (row.key === "instant_chat_price")    setChatEarningRate(row.value);
         if (row.key === "available_video_price") setVideoEarningRate(row.value);
       });
     };
@@ -129,7 +130,7 @@ export function DoctorDashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "admin_pricing" },
         (payload) => {
           const row = payload.new as { key: string; value: number };
-          if (row.key === "available_chat_price")  setChatEarningRate(row.value);
+          if (row.key === "instant_chat_price")    setChatEarningRate(row.value);
           if (row.key === "available_video_price") setVideoEarningRate(row.value);
         })
       .subscribe();
@@ -169,67 +170,7 @@ export function DoctorDashboard() {
     if (uid) await updateDoctorAvailability(uid, next.chat, false);
   };
 
-  // ── Realtime: listen for new consultation_requests matching doctor's specialization
-  useEffect(() => {
-    if (!isOnline || !doctor?.specialization) return;
-    const uid = doctor.firebase_uid;
-    const spec = doctor.specialization.toLowerCase().trim();
-
-    // Poll every 1s for any 'searching' request matching specialty
-    const poll = async () => {
-      const { data } = await supabase
-        .from("consultation_requests")
-        .select("id, patient_id, patient_name, specialty, description, duration, severity, report_url, status, call_type, consult_mode, fee")
-        .eq("status", "searching")
-        .ilike("specialty", spec)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) {
-        const req = { ...data[0] } as ConsultationRequest;
-        // Always fetch real name from users table — patient_name in requests can be stale
-        const { data: user } = await supabase
-          .from("users").select("name").eq("id", req.patient_id).maybeSingle();
-        if (user?.name) req.patient_name = user.name;
-        setActiveRequest((prev) => prev?.id === req.id ? prev : req);
-      }
-    };
-
-    poll(); // run immediately on go online
-    const pollInterval = setInterval(poll, 5000); // reduced to 5s — realtime handles instant delivery
-
-    // Also subscribe realtime for instant delivery
-    const channel = supabase.channel(`consult_req_${uid}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "consultation_requests" },
-        (payload) => {
-          const req = { ...payload.new } as ConsultationRequest;
-          if (req.specialty?.toLowerCase().trim() === spec && req.status === "searching") {
-            // Always resolve real name from users table
-            supabase.from("users").select("name").eq("id", req.patient_id).maybeSingle()
-              .then(({ data: user }) => {
-                if (user?.name) req.patient_name = user.name;
-                setActiveRequest(req);
-              });
-          }
-        })
-      .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "consultation_requests" },
-        (payload) => {
-          const updated = payload.new as ConsultationRequest;
-          setActiveRequest((prev) => {
-            if (prev?.id === updated.id && updated.status !== "searching" && updated.doctor_id !== uid) {
-              return null;
-            }
-            return prev;
-          });
-        })
-      .subscribe();
-
-    return () => {
-      clearInterval(pollInterval);
-      supabase.removeChannel(channel);
-    };
-  }, [isOnline, doctor]);
+  // ── Realtime: consultation requests now handled globally by ConsultationQueueProvider ──
 
   const stats = [
     { label: "Today's Consults", value: String(clinicPatients), icon: Users, color: "text-primary" },
@@ -267,7 +208,7 @@ export function DoctorDashboard() {
 
   return (
     <MobileContainer>
-      <div className="h-screen bg-background flex flex-col relative">
+      <div className="h-screen bg-background flex flex-col">
         {/* Header */}
         <header className="sticky top-0 z-10 bg-card border-b border-border">
           <div className="flex items-center justify-between p-4">
@@ -304,7 +245,7 @@ export function DoctorDashboard() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-20 scrollbar-dark"
+        <main className="flex-1 overflow-y-auto pb-4 scrollbar-dark"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #1F2937' }}>
           <div className="p-4 space-y-4">
 
@@ -390,7 +331,7 @@ export function DoctorDashboard() {
               <Button variant={isOnline ? "outline" : "medical"} size="sm"
                 onClick={async () => {
                   const next = !isOnline;
-                  setIsOnline(next);
+                  setOnline(next);
                   localStorage.setItem("doctor_online", String(next));
                   if (next) {
                     const enabled = { chat: true, opd: true };
@@ -502,20 +443,7 @@ export function DoctorDashboard() {
 
         <BottomNav />
 
-        <ConsultationRequestPopup
-          isOpen={!!activeRequest}
-          request={activeRequest}
-          doctorId={doctor?.firebase_uid ?? ""}
-          onAccept={(req) => {
-            setActiveRequest(null);
-            if (req.call_type === "video") {
-              navigate("/video-call", { state: { request: req } });
-            } else {
-              navigate("/consultation", { state: { request: req } });
-            }
-          }}
-          onDecline={() => setActiveRequest(null)}
-        />
+        {/* Consultation popup is now handled globally by ConsultationQueueProvider in App.tsx */}
 
         {/* OPD offline confirmation popup */}
         <Dialog open={showOpdOfflinePopup} onOpenChange={setShowOpdOfflinePopup}>

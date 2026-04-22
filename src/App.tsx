@@ -4,10 +4,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { ConsultationQueueProvider } from "./context/ConsultationQueueProvider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { DoctorDashboard } from "./components/dashboard/DoctorDashboard";
 import { LiveConsultation } from "./components/consultation/LiveConsultation";
+import { VideoCallScreen } from "./components/consultation/VideoCallScreen";
 import { OpdBookingPage } from "./components/consultation/OpdBookingPage";
 import { PrescriptionScreen } from "./components/prescription/PrescriptionScreen";
 import { EarningsScreen } from "./components/earnings/EarningsScreen";
@@ -38,6 +40,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ConsultationQueueProvider>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<DoctorLogin />} />
@@ -46,6 +49,7 @@ const App = () => (
             <Route path="/schedule" element={<ScheduleScreen />} />
             <Route path="/consultations" element={<ConsultationsScreen />} />
             <Route path="/consultation" element={<LiveConsultation />} />
+            <Route path="/video-call" element={<VideoCallScreen />} />
             <Route path="/opd-booking" element={<OpdBookingPage />} />
             <Route path="/prescription" element={<PrescriptionScreen />} />
             <Route path="/earnings" element={<EarningsScreen />} />
@@ -65,6 +69,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ConsultationQueueProvider>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

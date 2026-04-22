@@ -188,7 +188,7 @@ export function EarningsScreen() {
 
   return (
     <MobileContainer>
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
 
         {/* Header */}
         <header className="sticky top-0 z-10 bg-card border-b border-border shrink-0">
@@ -218,7 +218,7 @@ export function EarningsScreen() {
 
         {/* ── PAYMENT HISTORY VIEW ── */}
         {view === "history" ? (
-          <main className="flex-1 overflow-y-auto pb-20 p-4 space-y-3 scrollbar-dark"
+          <main className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-dark"
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #1F2937' }}>
             {historyLoading ? (
               <div className="flex justify-center py-16">
@@ -279,7 +279,7 @@ export function EarningsScreen() {
         ) : (
 
         /* ── EARNINGS VIEW ── */
-        <main className="flex-1 overflow-y-auto pb-20 p-4 space-y-4 scrollbar-dark"
+        <main className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-dark"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #1F2937' }}>
 
           {/* Period selector */}

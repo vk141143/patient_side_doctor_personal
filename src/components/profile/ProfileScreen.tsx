@@ -82,12 +82,14 @@ export const ProfileScreen = () => {
 
   return (
     <MobileContainer>
-      <div className="scrollable-content bg-background pb-20">
+      <div className="h-screen bg-background flex flex-col">
 
         {/* Header */}
-        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-6">
+        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-6 shrink-0">
           <h1 className="text-xl font-semibold">Profile & Settings</h1>
         </div>
+
+        <div className="flex-1 overflow-y-auto">
 
         {/* Doctor Card */}
         <div className="px-4 -mt-4">
@@ -269,6 +271,8 @@ export const ProfileScreen = () => {
           </Button>
 
           <p className="text-center text-xs text-muted-foreground pt-2">Doctor App v1.0.0</p>
+        </div>
+
         </div>
 
         <BottomNav />

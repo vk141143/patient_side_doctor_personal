@@ -150,7 +150,7 @@ export const ScheduleScreen = () => {
           <p className="text-primary-foreground/70 text-sm mt-1">Manage your schedules by type</p>
         </div>
 
-        <div className="scrollable-content flex-1 min-h-0 px-4 py-4 space-y-4 pb-24">
+        <div className="scrollable-content flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-4">
 
           {/* Tabs */}
           <div className="flex bg-muted rounded-xl p-1">

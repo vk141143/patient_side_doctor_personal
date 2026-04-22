@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft, Clock, Brain, Send, MoreVertical, AlertCircle,
-  Loader2, Image as ImageIcon, FileText, X, Check, CheckCheck,
+  Loader2, Image as ImageIcon, FileText, X, Check, CheckCheck, Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,17 +70,25 @@ export function LiveConsultation() {
   const [uploading, setUploading]         = useState(false);
   const [showAISummary, setShowAISummary] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
+  const [showTimerEnd, setShowTimerEnd]   = useState(false);
   const [endReason, setEndReason]         = useState("");
   const [timeRemaining, setTimeRemaining] = useState(SESSION_SECS);
   const [timerPaused, setTimerPaused]     = useState(false);
   const [previewImg, setPreviewImg]       = useState<string | null>(null);
-  const fileInputRef    = useRef<HTMLInputElement>(null);
-  const imageInputRef   = useRef<HTMLInputElement>(null);
-  const bottomRef       = useRef<HTMLDivElement>(null);
-  const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const channelRef      = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const sessionChanRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const timerPausedRef  = useRef(false);
+  const [patientTyping, setPatientTyping] = useState(false);
+  const [showVideoConfirm, setShowVideoConfirm] = useState(false);
+  const [videoCallSessionId, setVideoCallSessionId] = useState<string | null>(null);
+  const [showReopenPopup, setShowReopenPopup] = useState(false);
+  const [reopenSession, setReopenSession] = useState<ChatSession | null>(null);
+  const fileInputRef      = useRef<HTMLInputElement>(null);
+  const imageInputRef     = useRef<HTMLInputElement>(null);
+  const bottomRef         = useRef<HTMLDivElement>(null);
+  const pollRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+  const channelRef        = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionChanRef    = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const timerPausedRef    = useRef(false);
+  const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingHideRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Find or create session
   useEffect(() => {
@@ -183,6 +191,27 @@ export function LiveConsultation() {
           filter: `session_id=eq.${sessionId}` },
         async (payload) => {
           const newMsg = payload.new as ChatMessage;
+
+          // ── time extended by user (paid or bonus) ──────────────────────────
+          if (newMsg.type === "system" && newMsg.content?.startsWith("__time_extended__:") && newMsg.sender_role === "patient") {
+            const secs = parseInt(newMsg.content.split(":")[1], 10);
+            if (secs > 0) { setTimeRemaining((prev) => prev + secs); setShowTimerEnd(false); }
+            return;
+          }
+          // ── patient initiated video call ───────────────────────────────────────────
+          if (newMsg.type === "system" && newMsg.content?.startsWith("__video_call__:") && newMsg.sender_role === "patient") {
+            const vcSessionId = newMsg.content.split(":")[1];
+            setVideoCallSessionId(vcSessionId);
+            setShowVideoConfirm(true);
+            return;
+          }
+          // ── patient typing indicator ───────────────────────────────────────────────
+          if (newMsg.type === "system" && newMsg.content === "__typing__" && newMsg.sender_role === "patient") {
+            setPatientTyping(true);
+            if (typingHideRef.current) clearTimeout(typingHideRef.current);
+            typingHideRef.current = setTimeout(() => setPatientTyping(false), 3000);
+            return;
+          }
           await appendMessage(newMsg);
           setMessages((prev) => {
             if (prev.find((m) => m.id === newMsg.id)) return prev;
@@ -196,6 +225,7 @@ export function LiveConsultation() {
             return [...prev, newMsg];
           });
           if (newMsg.sender_role === "patient") {
+            setPatientTyping(false); // hide typing when real message arrives
             await supabase.from("instant_chat_messages")
               .update({ is_read: true }).eq("id", newMsg.id);
           }
@@ -217,7 +247,7 @@ export function LiveConsultation() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Subscribe to session status changes (so both sides see "ended")
+  // Subscribe to session status changes
   const subscribeSession = (sessionId: string) => {
     if (sessionChanRef.current) supabase.removeChannel(sessionChanRef.current);
     const ch = supabase.channel(`session_status_${sessionId}`)
@@ -228,6 +258,11 @@ export function LiveConsultation() {
           if (updated.status === "ended") {
             if (pollRef.current) clearInterval(pollRef.current);
             navigate("/dashboard");
+          }
+          // patient reopened the session
+          if (updated.status === "active" && session?.status === "ended") {
+            setReopenSession(updated);
+            setShowReopenPopup(true);
           }
         })
       .subscribe();
@@ -241,7 +276,11 @@ export function LiveConsultation() {
     const timer = setInterval(() => {
       if (timerPausedRef.current) return;
       setTimeRemaining((prev) => {
-        if (prev <= 1) { clearInterval(timer); handleEndSession("Session time expired"); return 0; }
+        if (prev <= 1) {
+          clearInterval(timer);
+          setShowTimerEnd(true); // show extend/end popup
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
@@ -261,6 +300,32 @@ export function LiveConsultation() {
       timerPausedRef.current = false;
     }
   }, [location.key]);
+
+  // Throttled typing signal to patient
+  const handleInputChange = (text: string) => {
+    setMessage(text);
+    if (!session || typingThrottleRef.current) return;
+    supabase.from("instant_chat_messages").insert({
+      session_id: session.id, sender_id: doctorId,
+      sender_role: "doctor", type: "system", content: "__typing__", is_read: false,
+    });
+    typingThrottleRef.current = setTimeout(() => { typingThrottleRef.current = null; }, 2000);
+  };
+
+  // Doctor extends time — adds seconds and notifies user via system message
+  const handleDoctorExtend = async (seconds: number) => {
+    if (!session) return;
+    setTimeRemaining((prev) => prev + seconds);
+    setShowTimerEnd(false);
+    await supabase.from("instant_chat_messages").insert({
+      session_id:  session.id,
+      sender_id:   doctorId,
+      sender_role: "doctor",
+      type:        "system",
+      content:     `__time_extended__:${seconds}`,
+      is_read:     false,
+    });
+  };
 
   // Send text (optimistic)
   const handleSend = async () => {
@@ -321,18 +386,32 @@ export function LiveConsultation() {
       status: "completed", updated_at: new Date().toISOString(),
     }).eq("id", request?.id);
 
-    // Record earnings (71% of fee) into doctor_earnings
-    if (request?.fee && request.fee > 0) {
-      const earned = Math.floor(request.fee * 0.71);
-      const source = request.call_type === "video" ? "video" : "chat";
+    // Resolve fee: use request.fee if present, else fetch from admin_pricing
+    let patientFee = Number(request?.fee ?? 0);
+    if (!patientFee || patientFee <= 0) {
+      const isVideo   = request?.call_type === "video";
+      const isInstant = request?.consult_mode === "instant";
+      const key = isVideo ? "available_video_price"
+        : isInstant ? "instant_chat_price" : "available_chat_price";
+      const { data: pricing } = await supabase
+        .from("admin_pricing").select("value").eq("key", key).maybeSingle();
+      patientFee = Number(pricing?.value ?? 0);
+    }
+
+    if (patientFee > 0) {
+      const earned = Math.floor(patientFee * 0.71); // 71% to doctor, 29% platform
+      const source = request?.call_type === "video" ? "video" : "chat";
       const { error: earnErr } = await supabase.from("doctor_earnings").insert({
         doctor_id:    doctorId,
-        patient_name: session.patient_name ?? request.patient_name ?? null,
+        patient_name: session.patient_name ?? request?.patient_name ?? null,
         fee:          earned,
         source,
         earned_at:    new Date().toISOString(),
       });
-      if (earnErr) console.error("[earnings insert error]", earnErr);
+      if (earnErr) console.error("[earnings insert error]", earnErr.message, earnErr.details);
+      else console.log(`[earnings] inserted ₹${earned} (71% of ₹${patientFee})`);
+    } else {
+      console.warn("[earnings] patientFee is 0 — no earnings recorded");
     }
 
     navigate("/dashboard");
@@ -439,6 +518,13 @@ export function LiveConsultation() {
                 className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
                 <Brain className="w-3.5 h-3.5" /> Summary
               </button>
+              {/* Video button */}
+              <button
+                onClick={() => { setVideoCallSessionId(null); setShowVideoConfirm(true); }}
+                disabled={!session}
+                className="p-1.5 rounded-full bg-blue-100 hover:bg-blue-200 transition-colors disabled:opacity-40">
+                <Video className="w-4 h-4 text-blue-600" />
+              </button>
               {/* Rx button — pauses timer on both sides, navigates to prescription WITHOUT ending session */}
               <Button variant="outline" size="sm"
                 onClick={async () => {
@@ -490,6 +576,7 @@ export function LiveConsultation() {
                   </div>
                 );
               }
+              // hide all other system messages (__time_extended__, __timer_pause__, etc.)
               return null;
             }
             const time     = new Date(msg.created_at).toLocaleTimeString("en-IN",
@@ -568,6 +655,33 @@ export function LiveConsultation() {
           <div ref={bottomRef} />
         </div>
 
+        {/* Typing indicator — WhatsApp style, patient on the right (doctor's perspective) */}
+        {patientTyping && (
+          <div className="px-3 pb-1 bg-card">
+            <div className="flex justify-end items-end gap-2">
+              {/* Patient avatar */}
+              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 order-2">
+                <span className="text-[10px] font-bold text-primary">{patientInitials}</span>
+              </div>
+              {/* Bubble */}
+              <div className="bg-primary/10 px-4 py-3 rounded-2xl rounded-br-sm order-1">
+                <div className="flex gap-1 items-center">
+                  {[0, 200, 400].map((delay) => (
+                    <span
+                      key={delay}
+                      className="w-2 h-2 rounded-full bg-primary animate-bounce"
+                      style={{
+                        animationDelay: `${delay}ms`,
+                        animationDuration: "0.8s",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Quick replies */}
         <div className="px-3 py-2 bg-card border-t border-border">
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -602,7 +716,7 @@ export function LiveConsultation() {
               className="flex-1 h-11 rounded-full bg-muted border-0 focus-visible:ring-1"
               value={message}
               disabled={uploading}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             />
             <Button variant="medical" size="icon" className="h-11 w-11 rounded-full shrink-0"
@@ -673,6 +787,33 @@ export function LiveConsultation() {
           </div>
         )}
 
+        {/* Timer end popup — doctor can extend or end */}
+        <AlertDialog open={showTimerEnd} onOpenChange={setShowTimerEnd}>
+          <AlertDialogContent className="max-w-[340px] rounded-2xl p-5 mx-4">
+            <AlertDialogHeader className="text-center">
+              <div className="w-14 h-14 rounded-full bg-warning/10 flex items-center justify-center mx-auto mb-3">
+                <Clock className="w-7 h-7 text-warning" />
+              </div>
+              <AlertDialogTitle>Session Time's Up</AlertDialogTitle>
+              <AlertDialogDescription>
+                The consultation time has ended. Extend the session or end the chat.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-2 mt-4">
+              {[{ label: "+ 5 minutes", secs: 300 }, { label: "+ 10 minutes", secs: 600 }].map((opt) => (
+                <Button key={opt.secs} variant="outline" className="w-full h-11 rounded-xl"
+                  onClick={() => handleDoctorExtend(opt.secs)}>
+                  Extend {opt.label}
+                </Button>
+              ))}
+              <Button variant="destructive" className="w-full h-11 rounded-xl mt-1"
+                onClick={() => { setShowTimerEnd(false); handleEndSession("Session time expired"); }}>
+                End Consultation
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* End session dialog */}
         <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>
           <AlertDialogContent className="max-w-[340px] rounded-2xl p-5 mx-4">
@@ -698,6 +839,97 @@ export function LiveConsultation() {
               <Button variant="outline" className="w-full h-12 rounded-xl"
                 onClick={() => setShowEndDialog(false)}>
                 Continue Chat
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Video call confirmation */}
+        <AlertDialog open={showVideoConfirm} onOpenChange={setShowVideoConfirm}>
+          <AlertDialogContent className="max-w-[340px] rounded-2xl p-5 mx-4">
+            <AlertDialogHeader className="text-center">
+              <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
+                <Video className="w-7 h-7 text-blue-600" />
+              </div>
+              <AlertDialogTitle>
+                {videoCallSessionId ? "Patient Requesting Video Call" : "Start Video Call?"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {videoCallSessionId
+                  ? `${patientName} is requesting a video consultation.`
+                  : `This will open a video call with ${patientName}. Both of you need to allow camera and microphone access.`
+                }
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-2 mt-4">
+              <Button
+                className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => {
+                  // Prefer videoCallSessionId (patient-initiated), then live session.id
+                  // Never pass undefined — guard explicitly
+                  const targetSessionId = videoCallSessionId ?? session?.id ?? null;
+                  if (!targetSessionId) return; // session not ready yet
+                  const isPatientInitiated = !!videoCallSessionId;
+                  setShowVideoConfirm(false);
+                  setVideoCallSessionId(null);
+                  if (!isPatientInitiated && session) {
+                    supabase.from("instant_chat_messages").insert({
+                      session_id:  session.id,
+                      sender_id:   doctorId,
+                      sender_role: "doctor",
+                      type:        "system",
+                      content:     `__video_call__:${session.id}`,
+                      is_read:     false,
+                    });
+                  }
+                  navigate("/video-call", {
+                    state: {
+                      request,
+                      sessionId:  targetSessionId,
+                      doctorName: session?.doctor_name ?? localStorage.getItem("doctor_name") ?? "Doctor",
+                      returnPath: "/consultation",
+                    },
+                  });
+                }}
+              >
+                <Video className="w-4 h-4 mr-2" />
+                {videoCallSessionId ? "Join Video Call" : "Start Video Call"}
+              </Button>
+              <Button variant="outline" className="w-full h-11 rounded-xl"
+                onClick={() => { setShowVideoConfirm(false); setVideoCallSessionId(null); }}>
+                {videoCallSessionId ? "Decline" : "Cancel"}
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Session reopen popup */}
+        <AlertDialog open={showReopenPopup} onOpenChange={setShowReopenPopup}>
+          <AlertDialogContent className="max-w-[340px] rounded-2xl p-5 mx-4">
+            <AlertDialogHeader className="text-center">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                <Brain className="w-7 h-7 text-primary" />
+              </div>
+              <AlertDialogTitle>Patient Wants to Continue</AlertDialogTitle>
+              <AlertDialogDescription>
+                {patientName} has reopened the consultation. Would you like to continue the chat?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-2 mt-4">
+              <Button variant="default" className="w-full h-11 rounded-xl"
+                onClick={() => {
+                  if (reopenSession) {
+                    setSession(reopenSession);
+                    setShowReopenPopup(false);
+                    subscribeMessages(reopenSession.id);
+                    fetchMessages(reopenSession.id);
+                  }
+                }}>
+                Accept &amp; Continue
+              </Button>
+              <Button variant="outline" className="w-full h-11 rounded-xl"
+                onClick={() => setShowReopenPopup(false)}>
+                Decline
               </Button>
             </div>
           </AlertDialogContent>

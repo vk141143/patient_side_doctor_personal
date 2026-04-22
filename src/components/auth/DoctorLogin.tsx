@@ -58,7 +58,6 @@ export const DoctorLogin = () => {
     setLoginLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      // save UID immediately so next app load skips Firebase boot delay (Option 2)
       localStorage.setItem("doctor_uid", cred.user.uid);
       // check admin approval in Supabase
       const { data, error } = await getDoctorByFirebaseUid(cred.user.uid);
@@ -67,6 +66,7 @@ export const DoctorLogin = () => {
         setLoginError("No doctor account found for this email.");
         return;
       }
+      localStorage.setItem("doctor_name", data.full_name ?? "");
       if (data.status === "pending") {
         await auth.signOut();
         clearDoctorCache();

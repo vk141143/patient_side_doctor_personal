@@ -151,7 +151,7 @@ export const ConsultationsScreen = () => {
 
   return (
     <MobileContainer>
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
 
         {/* Header */}
         <div className="bg-primary text-primary-foreground px-4 pt-12 pb-4 shrink-0">
@@ -181,7 +181,7 @@ export const ConsultationsScreen = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto pb-24 scrollbar-dark"
+        <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto scrollbar-dark"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #1F2937' }}>
           {loading ? (
             <div className="flex justify-center py-16">

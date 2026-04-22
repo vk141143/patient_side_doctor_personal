@@ -3,6 +3,7 @@ import { X, User, Loader2, MessageSquare, Video, IndianRupee } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { showLocalNotification, vibrateDevice } from "@/lib/notifications";
 
 export interface ConsultationRequest {
   id: string;
@@ -27,7 +28,7 @@ interface Props {
   onDecline: () => void;
 }
 
-const TIMEOUT_SECS = 30;
+const TIMEOUT_SECS = 60;
 
 const severityColor: Record<string, string> = {
   mild:     "bg-green-100 text-green-700 border-green-200",
@@ -60,8 +61,13 @@ export function ConsultationRequestPopup({ isOpen, request, doctorId, onAccept, 
 
   const startBuzzer = () => {
     try {
-      // Vibration API
-      if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      vibrateDevice([300, 100, 300, 100, 300, 100, 300]);
+      // Show local notification so doctor gets alerted even if app is in background tab
+      showLocalNotification(
+        isVideo ? "📹 New Video Call Request" : "⚡ New Consultation Request",
+        `Patient: ${request?.patient_name ?? "Patient"} · ${request?.specialty ?? ""}`,
+        "/dashboard"
+      );
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
       const playBeep = () => {
@@ -77,7 +83,7 @@ export function ConsultationRequestPopup({ isOpen, request, doctorId, onAccept, 
       playBeep();
       buzzerRef.current = setInterval(() => {
         playBeep();
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        vibrateDevice([200, 100, 200]);
       }, 1200);
     } catch {}
   };
@@ -140,10 +146,25 @@ export function ConsultationRequestPopup({ isOpen, request, doctorId, onAccept, 
       setTimeout(() => { setTaken(false); onDecline(); }, 2000);
       return;
     }
-    onAccept(request);
+    onAccept({ ...request, fee: Number(resolvedFee ?? request.fee ?? 0) });
   };
 
-  const handleDecline = () => { stopBuzzer(); onDecline(); };
+  const handleDecline = async () => {
+    stopBuzzer();
+    // Record this doctor's decline so the request can be re-queued to others
+    if (request?.id && doctorId) {
+      await supabase.rpc("append_doctor_decline", {
+        req_id: request.id,
+        doc_id: doctorId,
+      }).catch(() => {
+        // fallback if RPC not available: raw update
+        supabase.from("consultation_requests")
+          .update({ doctor_declines: supabase.rpc as any })
+          .eq("id", request.id);
+      });
+    }
+    onDecline();
+  };
 
   if (!isOpen || !request) return null;
 

@@ -1,15 +1,12 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { registerServiceWorker, requestNotificationPermission } from "./lib/notifications";
 
-// Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then(() => console.log('Service Worker registered'))
-      .catch(err => console.error('Service Worker registration failed:', err));
-  });
-}
+// Register SW + request notification permission
+window.addEventListener("load", async () => {
+  await registerServiceWorker();
+  await requestNotificationPermission();
+});
 
 createRoot(document.getElementById("root")!).render(<App />);
