@@ -30,6 +30,11 @@ serve(async (req) => {
     // Derive a stable customRoomId from the session UUID (alphanumeric, max 36 chars)
     const customRoomId = "mc" + session_id.replace(/-/g, "").slice(0, 20);
 
+    // Generate a unique participant token scoped to this room
+    // VIDEOSDK_TOKEN is the API key — we return it directly as the auth token
+    // Both sides get the same API key but VideoSDK identifies participants by name+meetingId
+    // To avoid same-participant conflict, token is the same but names must differ
+
     // 1. Try to fetch existing room by customRoomId
     const getRes = await fetch(`${VIDEOSDK_API}/${customRoomId}`, {
       headers: { Authorization: VIDEOSDK_TOKEN },

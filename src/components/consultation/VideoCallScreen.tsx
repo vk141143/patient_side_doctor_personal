@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MeetingProvider, useMeeting, useParticipant } from "@videosdk.live/react-sdk";
 import { MobileContainer } from "@/components/layout/MobileContainer";
 import { Button } from "@/components/ui/button";
-import { Loader2, VideoOff, PhoneOff, MicOff, Mic, VideoIcon } from "lucide-react";
+import { Loader2, VideoOff, PhoneOff, MicOff, Mic, VideoIcon, RefreshCw } from "lucide-react";
 import type { ConsultationRequest } from "./ConsultationRequestPopup";
 import { supabase } from "@/lib/supabase";
 
@@ -15,16 +15,20 @@ function ParticipantTile({ participantId, isLocal }: { participantId: string; is
 
   // Fix: depend on webcamStream AND webcamOn so it re-runs when stream arrives async
   useEffect(() => {
-    if (videoRef.current && webcamOn && webcamStream) {
-      videoRef.current.srcObject = new MediaStream([webcamStream.track]);
+    if (videoRef.current && webcamOn && webcamStream?.track) {
+      const ms = new MediaStream([webcamStream.track]);
+      videoRef.current.srcObject = ms;
+      videoRef.current.play().catch(() => {});
     } else if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
   }, [webcamStream, webcamOn]);
 
   useEffect(() => {
-    if (audioRef.current && !isLocal && micOn && micStream) {
-      audioRef.current.srcObject = new MediaStream([micStream.track]);
+    if (audioRef.current && !isLocal && micOn && micStream?.track) {
+      const ms = new MediaStream([micStream.track]);
+      audioRef.current.srcObject = ms;
+      audioRef.current.play().catch(() => {});
     } else if (audioRef.current) {
       audioRef.current.srcObject = null;
     }
@@ -59,20 +63,39 @@ function ParticipantTile({ participantId, isLocal }: { participantId: string; is
 }
 
 // ── Meeting view ──────────────────────────────────────────────────────────────
-function MeetingView({ localParticipantId, onEnd }: { localParticipantId: string; onEnd: () => void }) {
-  const { join, leave, toggleMic, toggleWebcam, participants } =
+function MeetingView({ onEnd }: { onEnd: () => void }) {
+  const { join, leave, toggleMic, toggleWebcam, changeWebcam, participants, localParticipant } =
     useMeeting({ onMeetingLeft: onEnd });
 
-  // Fix: track toggle state locally — localMicOn/localWebcamOn don't exist on useMeeting
   const [micOn, setMicOn]       = useState(true);
   const [webcamOn, setWebcamOn] = useState(true);
+  const [flipping, setFlipping] = useState(false);
+  const currentDeviceIdRef      = useRef<string | null>(null);
 
   useEffect(() => { join(); }, []);
 
-  const remoteIds = [...participants.keys()].filter((id) => id !== localParticipantId);
+  const localId   = localParticipant?.id ?? "";
+  const remoteIds = [...participants.keys()].filter((id) => id !== localId);
 
   const handleToggleMic = () => { toggleMic(); setMicOn((p) => !p); };
   const handleToggleCam = () => { toggleWebcam(); setWebcamOn((p) => !p); };
+
+  const handleFlipCamera = async () => {
+    if (flipping) return;
+    setFlipping(true);
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter((d) => d.kind === "videoinput");
+      if (cameras.length < 2) { setFlipping(false); return; }
+      const current = currentDeviceIdRef.current;
+      const next = cameras.find((c) => c.deviceId !== current) ?? cameras[0];
+      currentDeviceIdRef.current = next.deviceId;
+      await changeWebcam(next.deviceId);
+    } catch (e) {
+      console.error("[VideoCall] flip camera error:", e);
+    }
+    setFlipping(false);
+  };
 
   return (
     <div className="flex-1 flex flex-col gap-2 p-3 min-h-0">
@@ -88,14 +111,24 @@ function MeetingView({ localParticipantId, onEnd }: { localParticipantId: string
         )}
 
         {/* Local PiP — bottom right */}
-        <div className="absolute bottom-3 right-3 w-24 h-32 rounded-lg overflow-hidden shadow-lg border border-gray-600">
-          <ParticipantTile participantId={localParticipantId} isLocal={true} />
-        </div>
+        {localId && (
+          <div className="absolute bottom-3 right-3 w-24 h-32 rounded-lg overflow-hidden shadow-lg border border-gray-600">
+            <ParticipantTile participantId={localId} isLocal={true} />
+          </div>
+        )}
       </div>
 
       {/* Controls */}
       <div className="shrink-0 flex items-center justify-center gap-4 py-2">
         <button
+            onClick={handleFlipCamera}
+            disabled={flipping}
+            className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 text-white ${flipping ? "animate-spin" : ""}`} />
+          </button>
+
+          <button
           onClick={handleToggleMic}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
             micOn ? "bg-gray-700 hover:bg-gray-600" : "bg-red-500 hover:bg-red-600"
@@ -137,7 +170,6 @@ export function VideoCallScreen() {
   const [token, setToken]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
-  const [localParticipantId, setLocalParticipantId] = useState<string>("");
 
   const doctorName = localStorage.getItem("doctor_name") || sessionDoctorName || "Doctor";
 
@@ -205,10 +237,8 @@ export function VideoCallScreen() {
         <MeetingProvider
           config={{ meetingId: roomId!, micEnabled: true, webcamEnabled: true, name: doctorName }}
           token={token!}
-          joinWithoutUserInteraction
-          onMeetingJoined={(id: string) => setLocalParticipantId(id)}
         >
-          <MeetingView localParticipantId={localParticipantId} onEnd={handleEndCall} />
+          <MeetingView onEnd={handleEndCall} />
         </MeetingProvider>
       </div>
     </MobileContainer>
