@@ -4,19 +4,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowRight, Mail, User, MapPin, CheckCircle, Loader2, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Mail, User, MapPin, CheckCircle, Loader2, Lock, Eye, EyeOff, Phone } from "lucide-react";
 import { auth, sendEmailVerification, createUserWithEmailAndPassword, updatePassword } from "@/lib/firebase";
 
 interface BasicDetailsStepProps {
   onNext: (data: {
-    fullName: string; email: string; city: string; state: string;
+    fullName: string; phone: string; email: string; city: string; state: string;
     gender: string; firebaseUid: string; password: string;
   }) => void;
   onBack: () => void;
 }
 
 export function BasicDetailsStep({ onNext, onBack }: BasicDetailsStepProps) {
-  const [formData, setFormData] = useState({ fullName: "", email: "", city: "", state: "", gender: "" });
+  const [formData, setFormData] = useState({ fullName: "", phone: "", email: "", city: "", state: "", gender: "" });
+  const [phoneError, setPhoneError] = useState("");
   const [emailState, setEmailState] = useState<"idle" | "sending" | "sent" | "verified">("idle");
   const [emailError, setEmailError] = useState("");
   const [firebaseUid, setFirebaseUid] = useState("");
@@ -42,8 +43,12 @@ export function BasicDetailsStep({ onNext, onBack }: BasicDetailsStepProps) {
       setFirebaseUid(cred.user.uid);
       setEmailState("sent");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to send verification email";
-      setEmailError(msg.replace("Firebase: ", "").replace(/\(auth\/.*\)\.?/, "").trim());
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("email-already-in-use")) {
+        setEmailError("This email is already registered. Please use a different email or login instead.");
+      } else {
+        setEmailError(msg.replace("Firebase: ", "").replace(/\(auth\/.*\)\.?/, "").trim() || "Failed to send verification email");
+      }
       setEmailState("idle");
     }
   };
@@ -61,13 +66,17 @@ export function BasicDetailsStep({ onNext, onBack }: BasicDetailsStepProps) {
   const passwordValid = password.length >= 8;
   const passwordsMatch = password === confirmPassword;
 
+  const phoneValid = /^[6-9]\d{9}$/.test(formData.phone);
+
   const canContinue =
-    formData.fullName && formData.email && formData.city && formData.state &&
+    formData.fullName && formData.phone && phoneValid && formData.email && formData.city && formData.state &&
     emailState === "verified" && passwordValid && passwordsMatch && password.length > 0;
 
   const handleContinue = async () => {
+    if (!phoneValid) { setPhoneError("Enter a valid 10-digit Indian mobile number."); return; }
     if (!passwordValid) { setPasswordError("Password must be at least 8 characters."); return; }
     if (!passwordsMatch) { setPasswordError("Passwords do not match."); return; }
+    setPhoneError("");
     setPasswordError("");
     // Update the Firebase user's password from the temp one to the real one
     if (auth.currentUser) {
@@ -98,6 +107,23 @@ export function BasicDetailsStep({ onNext, onBack }: BasicDetailsStepProps) {
               <Input id="fullName" placeholder="Dr. John Doe" className="pl-10 h-12"
                 value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} />
             </div>
+          </div>
+
+          {/* Mobile Number */}
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-foreground font-medium">Mobile Number</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <span className="absolute left-10 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">+91</span>
+              <Input id="phone" type="tel" placeholder="9876543210" className="pl-16 h-12"
+                maxLength={10}
+                value={formData.phone}
+                onChange={(e) => { setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "") }); setPhoneError(""); }} />
+            </div>
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+            {formData.phone.length > 0 && !phoneValid && !phoneError && (
+              <p className="text-xs text-muted-foreground">Enter a valid 10-digit Indian mobile number.</p>
+            )}
           </div>
 
           {/* Email */}
@@ -132,7 +158,7 @@ export function BasicDetailsStep({ onNext, onBack }: BasicDetailsStepProps) {
             </div>
             {emailState === "sent" && (
               <p className="text-xs text-muted-foreground">
-                Verification email sent! Check your inbox, click the link, then press "I've verified".
+                Verification email sent! Check your inbox or spam, click the link, then press "I've verified".
               </p>
             )}
             {emailError && <p className="text-xs text-destructive">{emailError}</p>}

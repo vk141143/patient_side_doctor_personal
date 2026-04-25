@@ -6,9 +6,10 @@ import { MobileContainer } from "@/components/layout/MobileContainer";
 
 interface VerificationStatusScreenProps {
   onApproved: () => void;
+  onLogin?: () => void;
 }
 
-export function VerificationStatusScreen({ onApproved }: VerificationStatusScreenProps) {
+export function VerificationStatusScreen({ onApproved, onLogin }: VerificationStatusScreenProps) {
   const steps = [
     { id: 1, label: "Documents submitted", status: "completed", icon: FileSearch },
     { id: 2, label: "Identity verified", status: "pending", icon: Shield },
@@ -88,15 +89,18 @@ export function VerificationStatusScreen({ onApproved }: VerificationStatusScree
                 <Edit className="w-4 h-4 mr-2" />
                 Edit Submitted Details
               </Button>
-              <Button variant="ghost" size="lg" className="w-full">
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Contact Support
-              </Button>
             </div>
 
-            <Button variant="link" className="mt-8 text-primary" onClick={onApproved}>
-              (Demo: Skip to Approval)
-            </Button>
+            {/* Already have account */}
+            <p className="mt-6 text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <button
+                onClick={onLogin}
+                className="text-primary font-medium hover:underline"
+              >
+                Login
+              </button>
+            </p>
           </div>
         </ScrollArea>
       </div>

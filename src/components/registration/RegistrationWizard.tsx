@@ -27,7 +27,7 @@ const steps = [
 
 // ── shared data types ─────────────────────────────────────────────────────────
 export interface BasicData {
-  fullName: string; email: string; city: string; state: string;
+  fullName: string; email: string; phone: string; city: string; state: string;
   gender: string; firebaseUid: string; password: string;
 }
 export interface IdentityData {
@@ -97,6 +97,7 @@ export function RegistrationWizard({ onComplete, onBack }: RegistrationWizardPro
         firebase_uid:         uid,
         full_name:            basicData.fullName,
         email:                basicData.email,
+        phone:                basicData.phone,
         city:                 basicData.city,
         state:                basicData.state,
         gender:               basicData.gender || null,

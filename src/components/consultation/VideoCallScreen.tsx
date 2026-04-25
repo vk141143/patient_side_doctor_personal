@@ -72,7 +72,10 @@ function MeetingView({ onEnd }: { onEnd: () => void }) {
   const [flipping, setFlipping] = useState(false);
   const currentDeviceIdRef      = useRef<string | null>(null);
 
-  useEffect(() => { join(); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => join(), 800);
+    return () => clearTimeout(t);
+  }, []);
 
   const localId   = localParticipant?.id ?? "";
   const remoteIds = [...participants.keys()].filter((id) => id !== localId);

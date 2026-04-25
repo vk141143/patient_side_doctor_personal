@@ -4,10 +4,13 @@ import { RegistrationWizard } from "./RegistrationWizard";
 import { VerificationStatusScreen } from "./VerificationStatusScreen";
 import { ApprovalSuccessScreen } from "./ApprovalSuccessScreen";
 
+import { useNavigate } from "react-router-dom";
+
 type RegistrationState = "welcome" | "wizard" | "verification" | "approved";
 
 export function DoctorRegistration() {
   const [state, setState] = useState<RegistrationState>("welcome");
+  const navigate = useNavigate();
 
   switch (state) {
     case "welcome":
@@ -20,7 +23,7 @@ export function DoctorRegistration() {
         />
       );
     case "verification":
-      return <VerificationStatusScreen onApproved={() => setState("approved")} />;
+      return <VerificationStatusScreen onApproved={() => setState("approved")} onLogin={() => navigate("/login")} />;
     case "approved":
       return <ApprovalSuccessScreen />;
     default:
