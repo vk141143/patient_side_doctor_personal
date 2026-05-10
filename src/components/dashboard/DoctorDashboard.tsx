@@ -170,6 +170,49 @@ export function DoctorDashboard() {
     if (uid) await updateDoctorAvailability(uid, next.chat, false);
   };
 
+  // ── Online status heartbeat + crash/tab-close handler ──────────────────────
+  useEffect(() => {
+    const uid = doctor?.firebase_uid ?? localStorage.getItem("doctor_uid");
+    if (!uid || !isOnline) return;
+
+    // Heartbeat every 30s — keeps last_seen fresh
+    const heartbeat = setInterval(() => {
+      supabase.from("doctors")
+        .update({ is_online: true, last_seen: new Date().toISOString() })
+        .eq("firebase_uid", uid);
+    }, 30_000);
+
+    // Tab close / browser crash → set offline immediately
+    const handleOffline = () => {
+      // sendBeacon is fire-and-forget, works even during page unload
+      const url = `https://rbiskypizusqrlrkfzpc.supabase.co/rest/v1/doctors?firebase_uid=eq.${uid}`;
+      const body = JSON.stringify({ is_online: false, last_seen: new Date().toISOString() });
+      navigator.sendBeacon(
+        url + "&apikey=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaXNreXBpenVzcXJscmtmenBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNjAxNzMsImV4cCI6MjA5MTkzNjE3M30.VsY0hVK1TOjwd9XLmvm-3okXSKU4SkuGqA8A7f8DSWw",
+        new Blob([body], { type: "application/json" })
+      );
+    };
+
+    // visibilitychange catches tab switch + mobile app backgrounding
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") handleOffline();
+      else {
+        supabase.from("doctors")
+          .update({ is_online: true, last_seen: new Date().toISOString() })
+          .eq("firebase_uid", uid);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener("beforeunload", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [isOnline, doctor]);
+
   // ── Realtime: consultation requests now handled globally by ConsultationQueueProvider ──
 
   const stats = [

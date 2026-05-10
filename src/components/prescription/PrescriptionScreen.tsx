@@ -77,7 +77,7 @@ export function PrescriptionScreen() {
     const { data: rx, error } = await supabase.from("chat_prescriptions").insert({
       session_id:       session.id,
       doctor_id:        doctorId,
-      patient_id:       session.patient_id ?? request?.patient_id,
+      patient_id:       session.patient_id ?? request?.patient_id ?? null,
       doctor_name:      doc?.full_name ?? "Doctor",
       doctor_specialty: doc?.specialization ?? "",
       diagnosis,

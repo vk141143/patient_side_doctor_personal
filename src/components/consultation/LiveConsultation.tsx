@@ -39,6 +39,7 @@ interface ChatMessage {
 
 interface ChatSession {
   id: string;
+  patient_id: string | null;
   patient_name: string | null;
   doctor_name: string | null;
   specialty: string | null;

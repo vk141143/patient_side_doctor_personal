@@ -39,24 +39,15 @@ export const logLoginLog = (data: Record<string, unknown>) =>
   supabase.from("login_logs").insert(data);
 
 export const updateDoctorOnlineStatus = async (firebase_uid: string, is_online: boolean) => {
+  // update doctors table directly — login_logs .order().limit() doesn't work on UPDATE
   const { error } = await supabase
-    .from("login_logs")
+    .from("doctors")
     .update({
       is_online,
-      online_changed_at: new Date().toISOString(),
-      status: is_online ? "went_online" : "went_offline",
+      last_seen: new Date().toISOString(),
     })
-    .eq("firebase_uid", firebase_uid)
-    .order("login_at", { ascending: false })
-    .limit(1);
-  if (error) console.error("[login_logs] online status error:", error.message, error.details, error.hint);
-
-  // also persist on doctors table
-  const { error: de } = await supabase
-    .from("doctors")
-    .update({ is_online })
     .eq("firebase_uid", firebase_uid);
-  if (de) console.error("[doctors] online status error:", de.message);
+  if (error) console.error("[doctors] online status error:", error.message);
 };
 
 export const updateDoctorAvailability = async (
